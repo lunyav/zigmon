@@ -1,32 +1,24 @@
 const std = @import("std");
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const module = b.addModule("root", .{
+    const module = b.addModule("zigmon", .{
         .root_source_file = b.path("src/zigmon.zig"),
-    });
-
-    const lib = b.addStaticLibrary(.{
-        .name = "zigmon",
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    lib.linkLibC();
-    lib.addIncludePath(b.path("src/dmon"));
-    lib.addCSourceFile(.{
+
+    module.addIncludePath(b.path("src/dmon"));
+    module.addCSourceFile(.{
         .file = b.path("src/dmon/dmon.c"),
         .flags = &.{
             // "-std=c99",
             "-fno-sanitize=undefined",
         },
     });
-
-    module.linkLibrary(lib);
 
     {
         const demo_raw_mod = b.createModule(.{
@@ -35,21 +27,15 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
+        demo_raw_mod.addImport("zigmon", module);
+
         const demo_raw = b.addExecutable(.{
             .name = "zigmod-demo-raw",
             .root_module = demo_raw_mod,
         });
 
-        demo_raw.root_module.addImport("zigmon", module);
-
-        b.installArtifact(demo_raw);
-
         const demo_cmd = b.addRunArtifact(demo_raw);
         demo_cmd.step.dependOn(b.getInstallStep());
-
-        if (b.args) |args| {
-            demo_cmd.addArgs(args);
-        }
 
         const demo_step = b.step("demo-raw", "Run the raw binding demo");
         demo_step.dependOn(&demo_cmd.step);
@@ -61,22 +47,15 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
+        demo_raw.addImport("zigmon", module);
 
         const demo = b.addExecutable(.{
             .name = "zigmod-demo",
             .root_module = demo_raw,
         });
 
-        demo.root_module.addImport("zigmon", module);
-
-        b.installArtifact(demo);
-
         const demo_cmd = b.addRunArtifact(demo);
         demo_cmd.step.dependOn(b.getInstallStep());
-
-        if (b.args) |args| {
-            demo_cmd.addArgs(args);
-        }
 
         const demo_step = b.step("demo", "Run the demo");
         demo_step.dependOn(&demo_cmd.step);
